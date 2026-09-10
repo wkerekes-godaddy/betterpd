@@ -1,0 +1,5 @@
+bin/
+config.toml
+V1/
+V2/
+.claude/settings.local.json

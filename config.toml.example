@@ -1,0 +1,17 @@
+# betterpd configuration
+# Copy to ~/.config/betterpd/config.toml and fill in your values.
+
+# PagerDuty API token
+token = ""
+
+# Your PagerDuty user ID (from your profile URL)
+user_id = ""
+
+# Your PagerDuty email (used as 'From' header for ack/resolve)
+#user_email = ""
+
+# How often to poll for updates (number = seconds, or use Go duration: 30s, 1m, etc.)
+refresh_interval = "30s"
+
+# Default scope: "mine", "team", or "all"
+default_scope = "mine"
