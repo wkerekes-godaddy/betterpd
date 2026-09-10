@@ -7,8 +7,9 @@ token = ""
 # Your PagerDuty user ID (from your profile URL)
 user_id = ""
 
+# This is only used for free PD accounts.  Leave this commented out (or remove it) if using a paid enterprise account.
 # Your PagerDuty email (used as 'From' header for ack/resolve)
-#user_email = ""
+# user_email = ""
 
 # How often to poll for updates (number = seconds, or use Go duration: 30s, 1m, etc.)
 refresh_interval = "30s"
