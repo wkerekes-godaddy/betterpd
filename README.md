@@ -1,5 +1,4 @@
-This was all written by Claude.  Just download the binary from the Releases page.  That's probably easier.
-
+This was all written by Claude.  Just download the binary from the Releases page.  That's probably easier.---
 
 # betterpd
 
