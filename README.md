@@ -1,15 +1,21 @@
-This was all written by Claude.  Just download the binary from the [Releases](https://github.com/wkerekes-godaddy/betterpd/releases) page.  That's probably easier.
+This was all written by Claude.  Just download the binary from the [Releases](https://github.com/wkerekes-godaddy/betterpd/releases/latest) page.  That's probably easier.
 
 ---
 
 # betterpd
 
-A terminal UI for PagerDuty. View, acknowledge, resolve, and snooze incidents without leaving your terminal.
+A terminal UI for PagerDuty. View, acknowledge, resolve, and ~~snooze~~* incidents without leaving your terminal.
 
 Built with [Bubble Tea](https://github.com/charmbracelet/bubbletea) and [Lip Gloss](https://github.com/charmbracelet/lipgloss).
 
 ## Install
+Download the [latest release](https://github.com/wkerekes-godaddy/betterpd/releases/latest).
 
+Optionally place the binary in a folder in your $PATH, or call it with the full path to the file.
+
+Grant execute permission with `chmod +x ./betterpd`
+
+<!--
 ```
 go install ./cmd/betterpd
 ```
@@ -19,7 +25,7 @@ Or build locally:
 ```
 make build        # outputs to bin/betterpd
 ```
-
+-->
 ## Setup
 
 Run the interactive setup to create your config file:
@@ -78,3 +84,5 @@ refresh_interval = "30s"
 # Default scope: "mine", "team", or "all"
 default_scope = "mine"
 ```
+
+* Snoozing an alert is questionable at best.  Sometimes it works, sometimes it doesn't.  This might be a limit of the API.
