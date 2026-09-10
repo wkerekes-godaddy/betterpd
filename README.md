@@ -1,3 +1,6 @@
+This was all written by Claude.  Just download the binary from the Releases page.  That's probably easier.
+
+
 # betterpd
 
 A terminal UI for PagerDuty. View, acknowledge, resolve, and snooze incidents without leaving your terminal.
