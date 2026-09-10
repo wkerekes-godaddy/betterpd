@@ -1,4 +1,4 @@
-This was all written by Claude.  Just download the binary from the Releases page.  That's probably easier.
+This was all written by Claude.  Just download the binary from the [Releases](https://github.com/wkerekes-godaddy/betterpd/releases) page.  That's probably easier.
 
 ---
 
