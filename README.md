@@ -64,6 +64,7 @@ betterpd --help       # show help
 | `j`/`k`, `↑`/`↓` | Navigate incidents |
 | `space` | Toggle select (for batch actions) |
 | `a` | Acknowledge selected/current incident(s) |
+| `A` | Acknowledge all triggered incidents |
 | `x` | Resolve selected/current incident(s) |
 | `s` | Snooze (pick duration) |
 | `o` | Open incident in browser |
