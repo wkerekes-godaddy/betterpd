@@ -1,5 +1,4 @@
 bin/
 config.toml
-V1/
-V2/
+V*/
 .claude/settings.local.json
