@@ -1,3 +1,4 @@
 bin/
 config.toml
 .claude/settings.local.json
+TODO.md
