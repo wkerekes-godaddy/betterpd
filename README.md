@@ -15,6 +15,14 @@ Optionally place the binary in a folder in your $PATH, or call it with the full 
 
 Grant execute permission with `chmod +x ./betterpd`
 
+### Bonus installation steps for Mac:
+MacOS will try to stop `betterpd` from running because of security settings.  There are two options to get around this:
+
+1. Try running it once, then open System Settings → Privacy & Security. Under the security warning, click Open Anyway, authenticate, and confirm.
+2. Remove the quarantine attribute from the executable.  Change the path if you saved this to somewhere other than `~/bin/betterpd`.
+    ```
+    xattr -d com.apple.quarantine ~/bin/betterpd
+    ```
 <!--
 ```
 go install ./cmd/betterpd
