@@ -180,6 +180,11 @@ func (a *App) handleListKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if len(ids) > 0 {
 			return a, a.acknowledge(ids)
 		}
+	case "A":
+		ids := a.list.triggeredIDs()
+		if len(ids) > 0 {
+			return a, a.acknowledge(ids)
+		}
 	case "x":
 		ids := a.list.selectedIDs()
 		if len(ids) > 0 {

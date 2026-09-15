@@ -14,6 +14,7 @@ func (h helpOverlay) View() string {
 		{"j/k, ↑/↓", "Navigate"},
 		{"space", "Toggle select"},
 		{"a", "Acknowledge"},
+		{"A", "Acknowledge all triggered"},
 		{"x", "Resolve"},
 		{"s", "Snooze"},
 		{"o", "Open in browser"},

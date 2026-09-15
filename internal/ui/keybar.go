@@ -10,6 +10,7 @@ type keyHint struct {
 var commonKeyHints = []keyHint{
 	{"j/k", "nav"},
 	{"a", "ack"},
+	{"A", "ack all"},
 	{"x", "resolve"},
 	{"s", "snooze"},
 	{"o", "open"},
