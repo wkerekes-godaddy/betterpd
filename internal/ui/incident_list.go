@@ -121,6 +121,16 @@ func (il *incidentList) clearSelection() {
 	il.selected = make(map[string]bool)
 }
 
+func (il *incidentList) triggeredIDs() []string {
+	var ids []string
+	for _, inc := range il.incidents {
+		if inc.Status == "triggered" {
+			ids = append(ids, inc.ID)
+		}
+	}
+	return ids
+}
+
 func (il incidentList) Update(msg tea.Msg) (incidentList, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
