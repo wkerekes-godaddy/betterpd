@@ -1,14 +1,15 @@
-This was all written by Claude.  Just download the binary from the [Releases](https://github.com/wkerekes-godaddy/betterpd/releases/latest) page.  That's probably easier.
+This was ~~all~~ mostly written by Claude.  Just download the binary from the [Releases](https://github.com/wkerekes-godaddy/betterpd/releases/latest) page.  That's probably easier.
 
 ---
 
 # betterpd
 
 A terminal UI for PagerDuty. View, acknowledge, resolve, and ~~snooze~~* incidents without leaving your terminal.
-
 Built with [Bubble Tea](https://github.com/charmbracelet/bubbletea) and [Lip Gloss](https://github.com/charmbracelet/lipgloss).
 
 ## Install
+❗Requires a Pagerduty API key ❗
+
 Download the [latest release](https://github.com/wkerekes-godaddy/betterpd/releases/latest).
 
 Optionally place the binary in a folder in your $PATH, or call it with the full path to the file.
@@ -84,6 +85,8 @@ token = ""
 # Your PagerDuty user ID (from your profile URL)
 user_id = ""
 
+# This field is only used if you have a free Pagerduty account.
+# For paid accounts, leave this section commented out.
 # Your PagerDuty email (used as 'From' header for ack/resolve)
 #user_email = ""
 
