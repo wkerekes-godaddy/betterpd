@@ -64,9 +64,10 @@ type App struct {
 	// for those — not for every acknowledged incident with a pending
 	// auto-unacknowledge timeout.
 	snoozed map[string]time.Time
+	version string
 }
 
-func NewApp(client *pd.Client, scope pd.Scope, interval time.Duration) *App {
+func NewApp(client *pd.Client, scope pd.Scope, interval time.Duration, version string) *App {
 	return &App{
 		client:   client,
 		scope:    scope,
@@ -76,6 +77,7 @@ func NewApp(client *pd.Client, scope pd.Scope, interval time.Duration) *App {
 		status:   statusBar{orgName: client.OrgName()},
 		loading:  true,
 		snoozed:  make(map[string]time.Time),
+		version:  version,
 	}
 }
 
@@ -301,7 +303,7 @@ func (a *App) View() string {
 		overlay := a.centerOverlay(a.snooze.View())
 		content = a.overlayOn(bg, overlay)
 	default:
-		header := styleTitle.Render("betterpd")
+		header := styleTitle.Render("betterpd") + " " + styleHelp.Render(a.version)
 		if a.loading {
 			header += " " + styleHelp.Render("loading...")
 		}
