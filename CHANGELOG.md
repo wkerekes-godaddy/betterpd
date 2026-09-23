@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.1.3
+### 09/23/2026
+- Show version number in app header (injected at build time via ldflags)
+
 ## v0.1.2
 ### 09/23/2026
 - Fix snoozing acknowledged incidents — PagerDuty only allows snoozing triggered incidents, so the app now re-triggers them first before snoozing
