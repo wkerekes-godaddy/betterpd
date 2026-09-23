@@ -115,8 +115,29 @@ func (c *Client) Resolve(ctx context.Context, ids []string) error {
 
 func (c *Client) Snooze(ctx context.Context, id string, duration time.Duration) error {
 	_, err := c.api.SnoozeIncidentWithContext(ctx, id, uint(duration.Seconds()))
-	if err != nil {
+	if err == nil {
+		return nil
+	}
+
+	// PagerDuty only allows snoozing triggered incidents. If the incident is
+	// acknowledged, re-trigger it first so the snooze can proceed.
+	if err := c.manageIncident(ctx, id, "triggered"); err != nil {
+		return fmt.Errorf("re-triggering incident for snooze: %w", err)
+	}
+
+	if _, err := c.api.SnoozeIncidentWithContext(ctx, id, uint(duration.Seconds())); err != nil {
 		return fmt.Errorf("snoozing incident: %w", err)
+	}
+	return nil
+}
+
+func (c *Client) manageIncident(ctx context.Context, id string, status string) error {
+	incidents := []pagerduty.ManageIncidentsOptions{
+		{ID: id, Status: status, Type: "incident_reference"},
+	}
+	_, err := c.api.ManageIncidentsWithContext(ctx, c.email, incidents)
+	if err != nil {
+		return fmt.Errorf("managing incident (%s): %w", status, err)
 	}
 	return nil
 }

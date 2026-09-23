@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.1.2
+### 09/23/2026
+- Fix snoozing acknowledged incidents — PagerDuty only allows snoozing triggered incidents, so the app now re-triggers them first before snoozing
+
 ## v0.1.1
 ### 09/15/2026
 - Add "ack all" keybinding (Shift-A) to acknowledge all triggered incidents in the current view
