@@ -11,6 +11,8 @@ import (
 	"betterpd/internal/ui"
 )
 
+var version = "dev"
+
 const usage = `betterpd - A better PagerDuty TUI dashboard
 
 Usage:
@@ -82,7 +84,7 @@ func main() {
 		scope = pd.ScopeAll
 	}
 
-	app := ui.NewApp(client, scope, cfg.RefreshInterval.Duration)
+	app := ui.NewApp(client, scope, cfg.RefreshInterval.Duration, version)
 	p := tea.NewProgram(app, tea.WithAltScreen())
 
 	if _, err := p.Run(); err != nil {
