@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.1.4
+### 10/05/2026
+- Display on-call schedules in header — shows who's on Primary and Backup with shift end times in local timezone
+- Configurable schedule names via `schedule_names` in config.toml
+
 ## v0.1.3
 ### 09/23/2026
 - Show version number in app header (injected at build time via ldflags)
