@@ -17,6 +17,7 @@ type Config struct {
 	UserEmail       string   `toml:"user_email"`
 	RefreshInterval Duration `toml:"refresh_interval"`
 	DefaultScope    string   `toml:"default_scope"`
+	ScheduleNames   []string `toml:"schedule_names"`
 }
 
 type Duration struct {
@@ -46,6 +47,7 @@ func Load() (*Config, error) {
 	cfg := &Config{
 		RefreshInterval: Duration{30 * time.Second},
 		DefaultScope:    "mine",
+		ScheduleNames:   []string{"_Tickets/Primary", "_Tickets/Backup"},
 	}
 
 	configPath := filepath.Join(ConfigDir(), "config.toml")

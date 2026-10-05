@@ -30,6 +30,11 @@ type incidentsFetchedMsg struct {
 	err       error
 }
 
+type oncallFetchedMsg struct {
+	entries []pd.OnCallEntry
+	err     error
+}
+
 type actionCompleteMsg struct {
 	action string
 	err    error
@@ -63,26 +68,33 @@ type App struct {
 	// action), keyed by incident ID, so the list can show "snoozed" only
 	// for those — not for every acknowledged incident with a pending
 	// auto-unacknowledge timeout.
-	snoozed map[string]time.Time
-	version string
+	snoozed     map[string]time.Time
+	version     string
+	scheduleIDs []string
+	oncall      []pd.OnCallEntry
 }
 
-func NewApp(client *pd.Client, scope pd.Scope, interval time.Duration, version string) *App {
+func NewApp(client *pd.Client, scope pd.Scope, interval time.Duration, version string, scheduleIDs []string) *App {
 	return &App{
-		client:   client,
-		scope:    scope,
-		interval: interval,
-		list:     newIncidentList(),
-		snooze:   newSnoozePicker(),
-		status:   statusBar{orgName: client.OrgName()},
-		loading:  true,
-		snoozed:  make(map[string]time.Time),
-		version:  version,
+		client:      client,
+		scope:       scope,
+		interval:    interval,
+		list:        newIncidentList(),
+		snooze:      newSnoozePicker(),
+		status:      statusBar{orgName: client.OrgName()},
+		loading:     true,
+		snoozed:     make(map[string]time.Time),
+		version:     version,
+		scheduleIDs: scheduleIDs,
 	}
 }
 
 func (a *App) Init() tea.Cmd {
-	return tea.Batch(a.fetchIncidents(), a.tick())
+	cmds := []tea.Cmd{a.fetchIncidents(), a.tick()}
+	if len(a.scheduleIDs) > 0 {
+		cmds = append(cmds, a.fetchOnCall())
+	}
+	return tea.Batch(cmds...)
 }
 
 func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -122,8 +134,18 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return a, a.fetchIncidents()
 
+	case oncallFetchedMsg:
+		if msg.err == nil {
+			a.oncall = msg.entries
+		}
+		return a, nil
+
 	case tickMsg:
-		return a, tea.Batch(a.fetchIncidents(), a.tick())
+		cmds := []tea.Cmd{a.fetchIncidents(), a.tick()}
+		if len(a.scheduleIDs) > 0 {
+			cmds = append(cmds, a.fetchOnCall())
+		}
+		return a, tea.Batch(cmds...)
 
 	case tea.KeyMsg:
 		return a.handleKey(msg)
@@ -307,6 +329,9 @@ func (a *App) View() string {
 		if a.loading {
 			header += " " + styleHelp.Render("loading...")
 		}
+		if oc := a.renderOnCall(); oc != "" {
+			header += "    " + oc
+		}
 		content = header + "\n" + a.list.View()
 	}
 
@@ -355,6 +380,36 @@ func (a *App) applySnoozeState(incidents []pd.Incident) {
 			delete(a.snoozed, incidents[i].ID)
 		}
 	}
+}
+
+func (a *App) fetchOnCall() tea.Cmd {
+	client := a.client
+	ids := a.scheduleIDs
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), apiTimeout)
+		defer cancel()
+		entries, err := client.ListOnCall(ctx, ids)
+		return oncallFetchedMsg{entries: entries, err: err}
+	}
+}
+
+func (a *App) renderOnCall() string {
+	if len(a.oncall) == 0 {
+		return ""
+	}
+	var parts []string
+	for _, oc := range a.oncall {
+		name := oc.ScheduleName
+		if idx := strings.LastIndex(name, "/"); idx >= 0 {
+			name = name[idx+1:]
+		}
+		s := styleTitle.Render(name) + styleHelp.Render(": ") + oc.UserName
+		if !oc.EndTime.IsZero() {
+			s += styleHelp.Render(" until ") + oc.EndTime.Local().Format("3:04pm")
+		}
+		parts = append(parts, s)
+	}
+	return strings.Join(parts, styleHelp.Render("  ·  "))
 }
 
 func (a *App) tick() tea.Cmd {

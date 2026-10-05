@@ -159,6 +159,59 @@ func (c *Client) manageIncidents(ctx context.Context, ids []string, status strin
 	return nil
 }
 
+func (c *Client) FindScheduleIDs(ctx context.Context, names []string) (map[string]string, error) {
+	result := make(map[string]string)
+	for _, name := range names {
+		resp, err := c.api.ListSchedulesWithContext(ctx, pagerduty.ListSchedulesOptions{
+			Query: name,
+			Limit: 1,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("searching schedules for %q: %w", name, err)
+		}
+		for _, s := range resp.Schedules {
+			if strings.Contains(s.Name, name) {
+				result[s.Name] = s.ID
+				break
+			}
+		}
+	}
+	return result, nil
+}
+
+func (c *Client) ListOnCall(ctx context.Context, scheduleIDs []string) ([]OnCallEntry, error) {
+	now := time.Now().UTC().Format(time.RFC3339)
+	resp, err := c.api.ListOnCallsWithContext(ctx, pagerduty.ListOnCallOptions{
+		ScheduleIDs: scheduleIDs,
+		Since:       now,
+		Until:       now,
+		Earliest:    true,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("listing on-calls: %w", err)
+	}
+
+	seen := make(map[string]bool)
+	var entries []OnCallEntry
+	for _, oc := range resp.OnCalls {
+		if seen[oc.Schedule.ID] {
+			continue
+		}
+		seen[oc.Schedule.ID] = true
+		entry := OnCallEntry{
+			ScheduleName: oc.Schedule.Summary,
+			UserName:     oc.User.Summary,
+		}
+		if oc.End != "" {
+			if t, err := time.Parse(time.RFC3339, oc.End); err == nil {
+				entry.EndTime = t
+			}
+		}
+		entries = append(entries, entry)
+	}
+	return entries, nil
+}
+
 func convertIncident(inc pagerduty.Incident) Incident {
 	i := Incident{
 		ID:      inc.ID,

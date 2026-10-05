@@ -39,3 +39,9 @@ type Incident struct {
 func (i Incident) IsSnoozed() bool {
 	return !i.SnoozedUntil.IsZero() && i.SnoozedUntil.After(time.Now())
 }
+
+type OnCallEntry struct {
+	ScheduleName string
+	UserName     string
+	EndTime      time.Time
+}

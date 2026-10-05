@@ -1,8 +1,10 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 
@@ -84,7 +86,21 @@ func main() {
 		scope = pd.ScopeAll
 	}
 
-	app := ui.NewApp(client, scope, cfg.RefreshInterval.Duration, version)
+	var scheduleIDs []string
+	if len(cfg.ScheduleNames) > 0 {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		schedMap, err := client.FindScheduleIDs(ctx, cfg.ScheduleNames)
+		cancel()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: could not look up schedules: %v\n", err)
+		} else {
+			for _, id := range schedMap {
+				scheduleIDs = append(scheduleIDs, id)
+			}
+		}
+	}
+
+	app := ui.NewApp(client, scope, cfg.RefreshInterval.Duration, version, scheduleIDs)
 	p := tea.NewProgram(app, tea.WithAltScreen())
 
 	if _, err := p.Run(); err != nil {
