@@ -11,6 +11,7 @@ import (
 	"betterpd/internal/config"
 	"betterpd/internal/pd"
 	"betterpd/internal/ui"
+	"betterpd/internal/updater"
 )
 
 var version = "dev"
@@ -20,6 +21,7 @@ const usage = `betterpd - A better PagerDuty TUI dashboard
 Usage:
   betterpd              Start the dashboard
   betterpd --config     Interactive setup (creates config file)
+  betterpd --update     Update to the latest release
   betterpd --help       Show this help
 
 Keybindings:
@@ -59,6 +61,9 @@ func main() {
 				fmt.Fprintf(os.Stderr, "Setup error: %v\n", err)
 				os.Exit(1)
 			}
+			return
+		case "--update", "update":
+			selfUpdate()
 			return
 		default:
 			fmt.Fprintf(os.Stderr, "Unknown flag: %s\nRun 'betterpd --help' for usage.\n", os.Args[1])
@@ -107,4 +112,36 @@ func main() {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
+}
+
+func selfUpdate() {
+	if version == "dev" {
+		fmt.Fprintln(os.Stderr, "Cannot update a dev build. Install from a release binary.")
+		os.Exit(1)
+	}
+
+	fmt.Printf("Checking for updates (current: %s)...\n", version)
+	rel, err := updater.CheckLatest(version)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error checking for updates: %v\n", err)
+		os.Exit(1)
+	}
+
+	if !rel.Newer {
+		fmt.Printf("Already up to date (%s).\n", version)
+		return
+	}
+
+	if rel.AssetURL == "" {
+		fmt.Fprintf(os.Stderr, "No release binary available for your platform.\n")
+		os.Exit(1)
+	}
+
+	fmt.Printf("Downloading %s...\n", rel.Version)
+	if err := updater.SelfUpdate(rel.AssetURL); err != nil {
+		fmt.Fprintf(os.Stderr, "Update failed: %v\n", err)
+		os.Exit(1)
+	}
+
+	fmt.Printf("Updated betterpd to %s.\n", rel.Version)
 }

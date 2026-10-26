@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"betterpd/internal/pd"
+	"betterpd/internal/updater"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
@@ -45,6 +46,8 @@ type actionCompleteMsg struct {
 	snoozedUntil time.Time
 }
 
+type updateAvailableMsg struct{ version string }
+
 type tickMsg time.Time
 
 type App struct {
@@ -69,9 +72,10 @@ type App struct {
 	// for those — not for every acknowledged incident with a pending
 	// auto-unacknowledge timeout.
 	snoozed     map[string]time.Time
-	version     string
-	scheduleIDs []string
-	oncall      []pd.OnCallEntry
+	version          string
+	updateAvailable  string
+	scheduleIDs      []string
+	oncall           []pd.OnCallEntry
 }
 
 func NewApp(client *pd.Client, scope pd.Scope, interval time.Duration, version string, scheduleIDs []string) *App {
@@ -90,7 +94,7 @@ func NewApp(client *pd.Client, scope pd.Scope, interval time.Duration, version s
 }
 
 func (a *App) Init() tea.Cmd {
-	cmds := []tea.Cmd{a.fetchIncidents(), a.tick()}
+	cmds := []tea.Cmd{a.fetchIncidents(), a.tick(), a.checkForUpdate()}
 	if len(a.scheduleIDs) > 0 {
 		cmds = append(cmds, a.fetchOnCall())
 	}
@@ -138,6 +142,10 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.err == nil {
 			a.oncall = msg.entries
 		}
+		return a, nil
+
+	case updateAvailableMsg:
+		a.updateAvailable = msg.version
 		return a, nil
 
 	case tickMsg:
@@ -326,6 +334,9 @@ func (a *App) View() string {
 		content = a.overlayOn(bg, overlay)
 	default:
 		header := styleTitle.Render("betterpd") + " " + styleHelp.Render(a.version)
+		if a.updateAvailable != "" {
+			header += " " + styleUpdateBanner.Render("Update available: "+a.updateAvailable+" — run betterpd --update")
+		}
 		if a.loading {
 			header += " " + styleHelp.Render("loading...")
 		}
@@ -410,6 +421,17 @@ func (a *App) renderOnCall() string {
 		parts = append(parts, s)
 	}
 	return strings.Join(parts, styleHelp.Render("  ·  "))
+}
+
+func (a *App) checkForUpdate() tea.Cmd {
+	v := a.version
+	return func() tea.Msg {
+		rel, err := updater.CheckLatest(v)
+		if err != nil || rel == nil || !rel.Newer {
+			return nil
+		}
+		return updateAvailableMsg{version: rel.Version}
+	}
 }
 
 func (a *App) tick() tea.Cmd {
