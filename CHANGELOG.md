@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.1.5
+### 10/26/2026
+- Add update checker — shows a banner in the header when a newer version is available
+- Add `--update` flag to self-update by downloading the latest release binary
+
 ## v0.1.4
 ### 10/05/2026
 - Display on-call schedules in header — shows who's on Primary and Backup with shift end times in local timezone
