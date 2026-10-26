@@ -56,4 +56,7 @@ var (
 
 	styleSnoozed = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("39"))
+
+	styleUpdateBanner = lipgloss.NewStyle().
+				Foreground(lipgloss.Color("220"))
 )
