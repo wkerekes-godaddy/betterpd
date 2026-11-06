@@ -12,12 +12,14 @@ import (
 )
 
 type Config struct {
-	Token           string   `toml:"token"`
-	UserID          string   `toml:"user_id"`
-	UserEmail       string   `toml:"user_email"`
-	RefreshInterval Duration `toml:"refresh_interval"`
-	DefaultScope    string   `toml:"default_scope"`
-	ScheduleNames   []string `toml:"schedule_names"`
+	Token              string   `toml:"token"`
+	UserID             string   `toml:"user_id"`
+	UserEmail          string   `toml:"user_email"`
+	RefreshInterval    Duration `toml:"refresh_interval"`
+	DefaultScope       string   `toml:"default_scope"`
+	ScheduleNames      []string `toml:"schedule_names"`
+	BlameSyncInterval  Duration `toml:"blame_sync_interval"`
+	BlameLookAheadDays int      `toml:"blame_look_ahead_days"`
 }
 
 type Duration struct {
@@ -45,9 +47,11 @@ func normalizeDuration(s string) string {
 
 func Load() (*Config, error) {
 	cfg := &Config{
-		RefreshInterval: Duration{30 * time.Second},
-		DefaultScope:    "mine",
-		ScheduleNames:   []string{"_Tickets/Primary", "_Tickets/Backup"},
+		RefreshInterval:    Duration{30 * time.Second},
+		DefaultScope:       "mine",
+		ScheduleNames:      []string{"_Tickets/Primary", "_Tickets/Backup"},
+		BlameSyncInterval:  Duration{4 * time.Hour},
+		BlameLookAheadDays: 30,
 	}
 
 	configPath := filepath.Join(ConfigDir(), "config.toml")

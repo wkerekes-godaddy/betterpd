@@ -45,3 +45,26 @@ type OnCallEntry struct {
 	UserName     string
 	EndTime      time.Time
 }
+
+type ScheduleEntry struct {
+	UserID   string
+	UserName string
+	Start    time.Time
+	End      time.Time
+}
+
+type ScheduleOverride struct {
+	ID       string
+	UserID   string
+	UserName string
+	Start    time.Time
+	End      time.Time
+}
+
+type ScheduleAuditRecord struct {
+	Action        string
+	ActorName     string
+	ExecutionTime time.Time
+	ScheduleID    string
+	ScheduleName  string
+}
