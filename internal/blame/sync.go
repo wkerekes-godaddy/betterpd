@@ -131,31 +131,34 @@ func diffEntries(scheduleID, scheduleName string, old, new []StoredEntry, audits
 				start, _ := time.Parse(time.RFC3339, key.Start)
 				end, _ := time.Parse(time.RFC3339, key.End)
 				changes = append(changes, Change{
-					ScheduleID:   scheduleID,
-					ScheduleName: scheduleName,
-					DetectedAt:   now,
-					ChangeType:   "modified",
-					Description:  fmt.Sprintf("%s replaced by %s", oldEntry.UserName, newEntry.UserName),
-					OriginalUser: oldEntry.UserName,
-					NewUser:      newEntry.UserName,
-					Start:        start,
-					End:          end,
-					ChangedBy:    changedBy,
+					ScheduleID:     scheduleID,
+					ScheduleName:   scheduleName,
+					DetectedAt:     now,
+					ChangeType:     "modified",
+					Description:    fmt.Sprintf("%s replaced by %s", oldEntry.UserName, newEntry.UserName),
+					OriginalUser:   oldEntry.UserName,
+					OriginalUserID: oldEntry.UserID,
+					NewUser:        newEntry.UserName,
+					NewUserID:      newEntry.UserID,
+					Start:          start,
+					End:            end,
+					ChangedBy:      changedBy,
 				})
 			}
 		} else {
 			start, _ := time.Parse(time.RFC3339, key.Start)
 			end, _ := time.Parse(time.RFC3339, key.End)
 			changes = append(changes, Change{
-				ScheduleID:   scheduleID,
-				ScheduleName: scheduleName,
-				DetectedAt:   now,
-				ChangeType:   "removed",
-				Description:  fmt.Sprintf("Shift removed: %s", oldEntry.UserName),
-				OriginalUser: oldEntry.UserName,
-				Start:        start,
-				End:          end,
-				ChangedBy:    changedBy,
+				ScheduleID:     scheduleID,
+				ScheduleName:   scheduleName,
+				DetectedAt:     now,
+				ChangeType:     "removed",
+				Description:    fmt.Sprintf("Shift removed: %s", oldEntry.UserName),
+				OriginalUser:   oldEntry.UserName,
+				OriginalUserID: oldEntry.UserID,
+				Start:          start,
+				End:            end,
+				ChangedBy:      changedBy,
 			})
 		}
 	}
@@ -172,6 +175,7 @@ func diffEntries(scheduleID, scheduleName string, old, new []StoredEntry, audits
 				ChangeType:   "added",
 				Description:  fmt.Sprintf("Shift added: %s", newEntry.UserName),
 				NewUser:      newEntry.UserName,
+				NewUserID:    newEntry.UserID,
 				Start:        start,
 				End:          end,
 				ChangedBy:    changedBy,

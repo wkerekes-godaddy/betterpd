@@ -136,6 +136,10 @@ func runBlame() {
 	fs := flag.NewFlagSet("blame", flag.ExitOnError)
 	forceSync := fs.Bool("sync", false, "Force a fresh sync regardless of cooldown")
 	days := fs.Int("days", 30, "Show changes from the last N days")
+	showAll := fs.Bool("all", false, "Include past (already-elapsed) shifts")
+	var showEveryone bool
+	fs.BoolVar(&showEveryone, "everyone", false, "Show changes for all users, not just you")
+	fs.BoolVar(&showEveryone, "team", false, "Show changes for all users, not just you")
 	fs.Parse(os.Args[2:])
 
 	cfg, err := config.Load()
@@ -195,6 +199,14 @@ func runBlame() {
 		fmt.Fprintf(os.Stderr, "Error listing changes: %v\n", err)
 		os.Exit(1)
 	}
+
+	opts := blame.DisplayOptions{
+		FutureOnly: !*showAll,
+	}
+	if !showEveryone {
+		opts.UserID = cfg.UserID
+	}
+	changes = blame.FilterChanges(changes, opts)
 
 	blame.DisplayChanges(changes, os.Stdout)
 }
