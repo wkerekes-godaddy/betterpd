@@ -152,7 +152,7 @@ func (d *DB) RecordChange(c Change) error {
 func (d *DB) ListChanges(since time.Time) ([]Change, error) {
 	rows, err := d.db.Query(
 		`SELECT id, schedule_id, schedule_name, detected_at, change_type, description, original_user, original_user_id, new_user, new_user_id, start_time, end_time, changed_by
-		 FROM changes WHERE detected_at >= ? ORDER BY detected_at DESC`,
+		 FROM changes WHERE detected_at >= ? ORDER BY detected_at ASC`,
 		since.UTC().Format(time.RFC3339),
 	)
 	if err != nil {
