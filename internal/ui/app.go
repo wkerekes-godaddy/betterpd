@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"betterpd/internal/blame"
 	"betterpd/internal/pd"
 	"betterpd/internal/updater"
 	tea "github.com/charmbracelet/bubbletea"
@@ -48,6 +49,8 @@ type actionCompleteMsg struct {
 
 type updateAvailableMsg struct{ version string }
 
+type blameSyncDoneMsg struct{ err error }
+
 type tickMsg time.Time
 
 type App struct {
@@ -75,21 +78,39 @@ type App struct {
 	version          string
 	updateAvailable  string
 	scheduleIDs      []string
+	scheduleMap      map[string]string
 	oncall           []pd.OnCallEntry
+
+	blameSyncInterval  time.Duration
+	blameLookAheadDays int
 }
 
-func NewApp(client *pd.Client, scope pd.Scope, interval time.Duration, version string, scheduleIDs []string) *App {
+type AppOptions struct {
+	Client             *pd.Client
+	Scope              pd.Scope
+	Interval           time.Duration
+	Version            string
+	ScheduleIDs        []string
+	ScheduleMap        map[string]string
+	BlameSyncInterval  time.Duration
+	BlameLookAheadDays int
+}
+
+func NewApp(opts AppOptions) *App {
 	return &App{
-		client:      client,
-		scope:       scope,
-		interval:    interval,
-		list:        newIncidentList(),
-		snooze:      newSnoozePicker(),
-		status:      statusBar{orgName: client.OrgName()},
-		loading:     true,
-		snoozed:     make(map[string]time.Time),
-		version:     version,
-		scheduleIDs: scheduleIDs,
+		client:             opts.Client,
+		scope:              opts.Scope,
+		interval:           opts.Interval,
+		list:               newIncidentList(),
+		snooze:             newSnoozePicker(),
+		status:             statusBar{orgName: opts.Client.OrgName()},
+		loading:            true,
+		snoozed:            make(map[string]time.Time),
+		version:            opts.Version,
+		scheduleIDs:        opts.ScheduleIDs,
+		scheduleMap:        opts.ScheduleMap,
+		blameSyncInterval:  opts.BlameSyncInterval,
+		blameLookAheadDays: opts.BlameLookAheadDays,
 	}
 }
 
@@ -97,6 +118,9 @@ func (a *App) Init() tea.Cmd {
 	cmds := []tea.Cmd{a.fetchIncidents(), a.tick(), a.checkForUpdate()}
 	if len(a.scheduleIDs) > 0 {
 		cmds = append(cmds, a.fetchOnCall())
+	}
+	if len(a.scheduleMap) > 0 {
+		cmds = append(cmds, a.blameSync())
 	}
 	return tea.Batch(cmds...)
 }
@@ -146,6 +170,11 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case updateAvailableMsg:
 		a.updateAvailable = msg.version
+		return a, nil
+
+	case blameSyncDoneMsg:
+		// Background blame sync completed — silently discard for now.
+		// Future: surface a notification if changes were detected.
 		return a, nil
 
 	case tickMsg:
@@ -421,6 +450,26 @@ func (a *App) renderOnCall() string {
 		parts = append(parts, s)
 	}
 	return strings.Join(parts, styleHelp.Render("  ·  "))
+}
+
+func (a *App) blameSync() tea.Cmd {
+	client := a.client
+	schedMap := a.scheduleMap
+	lookAhead := a.blameLookAheadDays
+	interval := a.blameSyncInterval
+	return func() tea.Msg {
+		store, err := blame.OpenDB()
+		if err != nil {
+			return blameSyncDoneMsg{err: err}
+		}
+		defer store.Close()
+
+		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+		defer cancel()
+
+		_, err = blame.Sync(ctx, client, store, schedMap, lookAhead, interval, false)
+		return blameSyncDoneMsg{err: err}
+	}
 }
 
 func (a *App) checkForUpdate() tea.Cmd {

@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.1.6
+### 11/09/2026
+- Add `betterpd blame` command for tracking on-call schedule changes
+- Default view shows only future shifts affecting you — much less noise
+- Add `--all` flag to include past (already-elapsed) shifts
+- Add `--everyone` / `--team` flags to show changes for all users on configured schedules
+- Group simultaneous changes under one header with compact inline periods
+
 ## v0.1.5
 ### 10/26/2026
 - Add update checker — shows a banner in the header when a newer version is available

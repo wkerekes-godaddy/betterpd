@@ -2,12 +2,14 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"os"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 
+	"betterpd/internal/blame"
 	"betterpd/internal/config"
 	"betterpd/internal/pd"
 	"betterpd/internal/ui"
@@ -20,6 +22,9 @@ const usage = `betterpd - A better PagerDuty TUI dashboard
 
 Usage:
   betterpd              Start the dashboard
+  betterpd blame        Show on-call schedule changes
+  betterpd blame --sync Force a fresh sync before showing changes
+  betterpd blame --days N  Show changes from the last N days (default 30)
   betterpd --config     Interactive setup (creates config file)
   betterpd --update     Update to the latest release
   betterpd --help       Show this help
@@ -65,6 +70,9 @@ func main() {
 		case "--update", "update":
 			selfUpdate()
 			return
+		case "blame", "--blame":
+			runBlame()
+			return
 		default:
 			fmt.Fprintf(os.Stderr, "Unknown flag: %s\nRun 'betterpd --help' for usage.\n", os.Args[1])
 			os.Exit(1)
@@ -92,26 +100,115 @@ func main() {
 	}
 
 	var scheduleIDs []string
+	var scheduleMap map[string]string
 	if len(cfg.ScheduleNames) > 0 {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		schedMap, err := client.FindScheduleIDs(ctx, cfg.ScheduleNames)
+		scheduleMap, err = client.FindScheduleIDs(ctx, cfg.ScheduleNames)
 		cancel()
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Warning: could not look up schedules: %v\n", err)
 		} else {
-			for _, id := range schedMap {
+			for _, id := range scheduleMap {
 				scheduleIDs = append(scheduleIDs, id)
 			}
 		}
 	}
 
-	app := ui.NewApp(client, scope, cfg.RefreshInterval.Duration, version, scheduleIDs)
+	app := ui.NewApp(ui.AppOptions{
+		Client:             client,
+		Scope:              scope,
+		Interval:           cfg.RefreshInterval.Duration,
+		Version:            version,
+		ScheduleIDs:        scheduleIDs,
+		ScheduleMap:        scheduleMap,
+		BlameSyncInterval:  cfg.BlameSyncInterval.Duration,
+		BlameLookAheadDays: cfg.BlameLookAheadDays,
+	})
 	p := tea.NewProgram(app, tea.WithAltScreen())
 
 	if _, err := p.Run(); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
+}
+
+func runBlame() {
+	fs := flag.NewFlagSet("blame", flag.ExitOnError)
+	forceSync := fs.Bool("sync", false, "Force a fresh sync regardless of cooldown")
+	days := fs.Int("days", 30, "Show changes from the last N days")
+	showAll := fs.Bool("all", false, "Include past (already-elapsed) shifts")
+	var showEveryone bool
+	fs.BoolVar(&showEveryone, "everyone", false, "Show changes for all users, not just you")
+	fs.BoolVar(&showEveryone, "team", false, "Show changes for all users, not just you")
+	fs.Parse(os.Args[2:])
+
+	cfg, err := config.Load()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+
+	client, err := pd.NewClient(cfg.Token, cfg.UserID, cfg.UserEmail)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+
+	if len(cfg.ScheduleNames) == 0 {
+		fmt.Fprintln(os.Stderr, "No schedule_names configured. Run 'betterpd --config' or add schedule_names to config.toml.")
+		os.Exit(1)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	schedMap, err := client.FindScheduleIDs(ctx, cfg.ScheduleNames)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error looking up schedules: %v\n", err)
+		os.Exit(1)
+	}
+	if len(schedMap) == 0 {
+		fmt.Fprintln(os.Stderr, "No matching schedules found for configured schedule_names.")
+		os.Exit(1)
+	}
+
+	store, err := blame.OpenDB()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+	defer store.Close()
+
+	syncCtx, syncCancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer syncCancel()
+
+	result, err := blame.Sync(syncCtx, client, store, schedMap, cfg.BlameLookAheadDays, cfg.BlameSyncInterval.Duration, *forceSync)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Sync error: %v\n", err)
+		os.Exit(1)
+	}
+
+	if result.IsInitial {
+		blame.DisplayInitialSync(result.ScheduleCount, os.Stdout)
+		return
+	}
+
+	since := time.Now().Add(-time.Duration(*days) * 24 * time.Hour)
+	changes, err := store.ListChanges(since)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error listing changes: %v\n", err)
+		os.Exit(1)
+	}
+
+	opts := blame.DisplayOptions{
+		FutureOnly: !*showAll,
+	}
+	if !showEveryone {
+		opts.UserID = cfg.UserID
+	}
+	changes = blame.FilterChanges(changes, opts)
+
+	blame.DisplayChanges(changes, os.Stdout)
 }
 
 func selfUpdate() {

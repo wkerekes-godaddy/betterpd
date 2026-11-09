@@ -212,6 +212,88 @@ func (c *Client) ListOnCall(ctx context.Context, scheduleIDs []string) ([]OnCall
 	return entries, nil
 }
 
+func (c *Client) GetRenderedSchedule(ctx context.Context, scheduleID string, since, until time.Time) ([]ScheduleEntry, error) {
+	sched, err := c.api.GetScheduleWithContext(ctx, scheduleID, pagerduty.GetScheduleOptions{
+		Since: since.UTC().Format(time.RFC3339),
+		Until: until.UTC().Format(time.RFC3339),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("getting schedule %s: %w", scheduleID, err)
+	}
+
+	var entries []ScheduleEntry
+	for _, e := range sched.FinalSchedule.RenderedScheduleEntries {
+		entry := ScheduleEntry{
+			UserID:   e.User.ID,
+			UserName: e.User.Summary,
+		}
+		if t, err := time.Parse(time.RFC3339, e.Start); err == nil {
+			entry.Start = t
+		}
+		if t, err := time.Parse(time.RFC3339, e.End); err == nil {
+			entry.End = t
+		}
+		entries = append(entries, entry)
+	}
+	return entries, nil
+}
+
+func (c *Client) ListScheduleOverrides(ctx context.Context, scheduleID string, since, until time.Time) ([]ScheduleOverride, error) {
+	resp, err := c.api.ListOverridesWithContext(ctx, scheduleID, pagerduty.ListOverridesOptions{
+		Since: since.UTC().Format(time.RFC3339),
+		Until: until.UTC().Format(time.RFC3339),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("listing overrides for schedule %s: %w", scheduleID, err)
+	}
+
+	var overrides []ScheduleOverride
+	for _, o := range resp.Overrides {
+		ov := ScheduleOverride{
+			ID:       o.ID,
+			UserID:   o.User.ID,
+			UserName: o.User.Summary,
+		}
+		if t, err := time.Parse(time.RFC3339, o.Start); err == nil {
+			ov.Start = t
+		}
+		if t, err := time.Parse(time.RFC3339, o.End); err == nil {
+			ov.End = t
+		}
+		overrides = append(overrides, ov)
+	}
+	return overrides, nil
+}
+
+func (c *Client) ListScheduleAuditRecords(ctx context.Context, since time.Time) ([]ScheduleAuditRecord, error) {
+	resp, err := c.api.ListAuditRecords(ctx, pagerduty.ListAuditRecordsOptions{
+		Since:              since.UTC().Format(time.RFC3339),
+		RootResourcesTypes: []string{"schedules"},
+		Limit:              100,
+	})
+	if err != nil {
+		// Audit API may not be available on all plans — degrade gracefully
+		return nil, nil
+	}
+
+	var records []ScheduleAuditRecord
+	for _, r := range resp.Records {
+		rec := ScheduleAuditRecord{
+			Action:       r.Action,
+			ScheduleID:   r.RootResource.ID,
+			ScheduleName: r.RootResource.Summary,
+		}
+		if len(r.Actors) > 0 {
+			rec.ActorName = r.Actors[0].Summary
+		}
+		if t, err := time.Parse(time.RFC3339, r.ExecutionTime); err == nil {
+			rec.ExecutionTime = t
+		}
+		records = append(records, rec)
+	}
+	return records, nil
+}
+
 func convertIncident(inc pagerduty.Incident) Incident {
 	i := Incident{
 		ID:      inc.ID,
