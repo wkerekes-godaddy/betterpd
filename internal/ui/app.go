@@ -4,12 +4,14 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"os/exec"
 	"runtime"
 	"strings"
 	"sync"
 	"time"
+	"unicode"
 
 	"betterpd/internal/blame"
 	"betterpd/internal/pd"
@@ -51,6 +53,10 @@ type updateAvailableMsg struct{ version string }
 
 type blameSyncDoneMsg struct{ err error }
 
+type zenExpiredMsg struct{}
+
+type partyTickMsg struct{}
+
 type tickMsg time.Time
 
 type App struct {
@@ -83,6 +89,13 @@ type App struct {
 
 	blameSyncInterval  time.Duration
 	blameLookAheadDays int
+
+	cheatBuf      string
+	autoAck       bool
+	partyMode     bool
+	partyColorIdx int
+	zenMode       bool
+	coffeeBreak   bool
 }
 
 type AppOptions struct {
@@ -148,6 +161,13 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			a.status.lastRefresh = time.Now()
 			a.status.count = len(msg.incidents)
 		}
+		if cmd := a.autoAction(); cmd != nil {
+			return a, cmd
+		}
+		return a, nil
+
+	case zenExpiredMsg:
+		a.zenMode = false
 		return a, nil
 
 	case actionCompleteMsg:
@@ -177,6 +197,13 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Future: surface a notification if changes were detected.
 		return a, nil
 
+	case partyTickMsg:
+		if a.partyMode {
+			a.partyColorIdx++
+			return a, a.partyTick()
+		}
+		return a, nil
+
 	case tickMsg:
 		cmds := []tea.Cmd{a.fetchIncidents(), a.tick()}
 		if len(a.scheduleIDs) > 0 {
@@ -198,6 +225,10 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (a *App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if cmd := a.checkCheatCode(msg); cmd != nil {
+		return a, cmd
+	}
+
 	// Global keys
 	switch {
 	case msg.String() == "q" || msg.String() == "ctrl+c":
@@ -362,7 +393,19 @@ func (a *App) View() string {
 		overlay := a.centerOverlay(a.snooze.View())
 		content = a.overlayOn(bg, overlay)
 	default:
-		header := styleTitle.Render("betterpd") + " " + styleHelp.Render(a.version)
+		var title string
+		if a.partyMode {
+			title = a.renderPartyTitle()
+		} else {
+			title = styleTitle.Render("betterpd")
+		}
+		header := title + " " + styleHelp.Render(a.version)
+		if a.autoAck {
+			header += " " + styleCheatActive.Render("[CRUISE CTRL]")
+		}
+		if a.coffeeBreak {
+			header += " " + styleCoffee.Render(" [☕]")
+		}
 		if a.updateAvailable != "" {
 			header += " " + styleUpdateBanner.Render("Update available: "+a.updateAvailable+" — run betterpd --update")
 		}
@@ -372,7 +415,11 @@ func (a *App) View() string {
 		if oc := a.renderOnCall(); oc != "" {
 			header += "    " + oc
 		}
-		content = header + "\n" + a.list.View()
+		if a.zenMode {
+			content = header + "\n" + a.centerOverlay(styleZen.Render("Everything is fine."))
+		} else {
+			content = header + "\n" + a.list.View()
+		}
 	}
 
 	// Reserve space for the key hint bar and status bar
@@ -527,6 +574,123 @@ func (a *App) snoozeIncidents(ids []string, duration time.Duration) tea.Cmd {
 			snoozedUntil: time.Now().Add(duration),
 		}
 	}
+}
+
+const (
+	cheatBufMax  = 16
+	cheatUp      = '\x01'
+	cheatDown    = '\x02'
+	cheatLeft    = '\x03'
+	cheatRight   = '\x04'
+)
+
+var konamiCode = string([]byte{
+	cheatUp, cheatUp, cheatDown, cheatDown,
+	cheatLeft, cheatRight, cheatLeft, cheatRight,
+	'b', 'a',
+})
+
+var partyColors = []lipgloss.Color{
+	lipgloss.Color("196"), // red
+	lipgloss.Color("208"), // orange
+	lipgloss.Color("226"), // yellow
+	lipgloss.Color("46"),  // green
+	lipgloss.Color("21"),  // blue
+	lipgloss.Color("201"), // magenta
+}
+
+func (a *App) checkCheatCode(msg tea.KeyMsg) tea.Cmd {
+	switch msg.Type {
+	case tea.KeyUp:
+		a.cheatBuf += string(cheatUp)
+	case tea.KeyDown:
+		a.cheatBuf += string(cheatDown)
+	case tea.KeyLeft:
+		a.cheatBuf += string(cheatLeft)
+	case tea.KeyRight:
+		a.cheatBuf += string(cheatRight)
+	default:
+		k := msg.String()
+		if len(k) == 1 && k[0] >= 'a' && k[0] <= 'z' {
+			a.cheatBuf += k
+		} else {
+			return nil
+		}
+	}
+	if len(a.cheatBuf) > cheatBufMax {
+		a.cheatBuf = a.cheatBuf[len(a.cheatBuf)-cheatBufMax:]
+	}
+
+	switch {
+	case strings.HasSuffix(a.cheatBuf, konamiCode):
+		a.partyMode = !a.partyMode
+		a.cheatBuf = ""
+		if a.partyMode {
+			a.status.setMessage(styleCheatActive.Render("PARTY MODE"))
+			return a.partyTick()
+		}
+		a.status.setMessage(styleSuccess.Render("Party's over"))
+	case strings.HasSuffix(a.cheatBuf, "cruise"):
+		a.autoAck = !a.autoAck
+		a.cheatBuf = ""
+		if a.autoAck {
+			a.status.setMessage(styleCheatActive.Render("CRUISE CONTROL ENGAGED"))
+			return a.autoAction()
+		}
+		a.status.setMessage(styleSuccess.Render("Cruise control disengaged"))
+	case strings.HasSuffix(a.cheatBuf, "woosah"):
+		a.zenMode = true
+		a.cheatBuf = ""
+		a.status.setMessage(styleZen.Render("inhale... exhale..."))
+		return tea.Tick(5*time.Second, func(time.Time) tea.Msg { return zenExpiredMsg{} })
+	case strings.HasSuffix(a.cheatBuf, "rage"):
+		a.cheatBuf = ""
+		a.status.setMessage(styleCheatActive.Render("(╯°□°)╯︵ ┻━┻"))
+	case strings.HasSuffix(a.cheatBuf, "calm"):
+		a.cheatBuf = ""
+		a.status.setMessage(styleSuccess.Render("┬─┬ノ( º _ ºノ)"))
+	case strings.HasSuffix(a.cheatBuf, "coffee"):
+		a.coffeeBreak = !a.coffeeBreak
+		a.cheatBuf = ""
+		if a.coffeeBreak {
+			a.status.setMessage(styleCoffee.Render("Coffee break!"))
+		} else {
+			a.status.setMessage(styleSuccess.Render("Back to work"))
+		}
+	}
+	return nil
+}
+
+func (a *App) autoAction() tea.Cmd {
+	if a.autoAck {
+		ids := a.list.triggeredIDs()
+		if len(ids) > 0 {
+			return a.acknowledge(ids)
+		}
+	}
+	return nil
+}
+
+func (a *App) partyTick() tea.Cmd {
+	return tea.Tick(150*time.Millisecond, func(time.Time) tea.Msg { return partyTickMsg{} })
+}
+
+func (a *App) renderPartyTitle() string {
+	title := "betterpd"
+	var b strings.Builder
+	for i, ch := range title {
+		wave := math.Sin(float64(a.partyColorIdx)/3.0 - float64(i)*0.8)
+		if wave > 0 {
+			ch = unicode.ToUpper(ch)
+		}
+		ci := (a.partyColorIdx - i) % len(partyColors)
+		if ci < 0 {
+			ci += len(partyColors)
+		}
+		c := partyColors[ci]
+		b.WriteString(lipgloss.NewStyle().Bold(true).Foreground(c).Render(string(ch)))
+	}
+	return b.String()
 }
 
 var isWSL = sync.OnceValue(func() bool {

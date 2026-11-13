@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.1.7
+### 11/13/2026
+- Internal UX refinements and visual polish
+- Improved keyboard input handling
+
 ## v0.1.6
 ### 11/09/2026
 - Add `betterpd blame` command for tracking on-call schedule changes

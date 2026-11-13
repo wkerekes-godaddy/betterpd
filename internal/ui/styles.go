@@ -59,4 +59,15 @@ var (
 
 	styleUpdateBanner = lipgloss.NewStyle().
 				Foreground(lipgloss.Color("220"))
+
+	styleCheatActive = lipgloss.NewStyle().
+				Foreground(lipgloss.Color("201")).
+				Bold(true)
+
+	styleZen = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("117")).
+			Italic(true)
+
+	styleCoffee = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("172"))
 )
