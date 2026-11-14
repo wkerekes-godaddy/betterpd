@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"math/rand"
 	"os"
 	"os/exec"
 	"runtime"
@@ -57,6 +58,10 @@ type zenExpiredMsg struct{}
 
 type partyTickMsg struct{}
 
+type fireTickMsg struct{}
+
+type fireExpiredMsg struct{}
+
 type tickMsg time.Time
 
 type App struct {
@@ -91,11 +96,17 @@ type App struct {
 	blameLookAheadDays int
 
 	cheatBuf      string
+	cheatLastKey  time.Time
 	autoAck       bool
 	partyMode     bool
 	partyColorIdx int
 	zenMode       bool
 	coffeeBreak   bool
+	fineMode      bool
+	fire          *fireGrid
+	worseName     bool
+	mondayMode    bool
+	mondayIdx     int
 }
 
 type AppOptions struct {
@@ -170,6 +181,18 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.zenMode = false
 		return a, nil
 
+	case fireTickMsg:
+		if a.fineMode && a.fire != nil {
+			a.fire.step()
+			return a, a.fireTick()
+		}
+		return a, nil
+
+	case fireExpiredMsg:
+		a.fineMode = false
+		a.fire = nil
+		return a, nil
+
 	case actionCompleteMsg:
 		if msg.err != nil {
 			a.status.setMessage(styleError.Render("Error: " + msg.err.Error()))
@@ -205,6 +228,9 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, nil
 
 	case tickMsg:
+		if a.mondayMode {
+			a.mondayIdx++
+		}
 		cmds := []tea.Cmd{a.fetchIncidents(), a.tick()}
 		if len(a.scheduleIDs) > 0 {
 			cmds = append(cmds, a.fetchOnCall())
@@ -393,11 +419,15 @@ func (a *App) View() string {
 		overlay := a.centerOverlay(a.snooze.View())
 		content = a.overlayOn(bg, overlay)
 	default:
+		appName := "betterpd"
+		if a.worseName {
+			appName = "could be betterpd"
+		}
 		var title string
 		if a.partyMode {
 			title = a.renderPartyTitle()
 		} else {
-			title = styleTitle.Render("betterpd")
+			title = styleTitle.Render(appName)
 		}
 		header := title + " " + styleHelp.Render(a.version)
 		if a.autoAck {
@@ -415,7 +445,9 @@ func (a *App) View() string {
 		if oc := a.renderOnCall(); oc != "" {
 			header += "    " + oc
 		}
-		if a.zenMode {
+		if a.fineMode && a.fire != nil {
+			content = a.fire.renderWithMessage("This is fine.")
+		} else if a.zenMode {
 			content = header + "\n" + a.centerOverlay(styleZen.Render("Everything is fine."))
 		} else {
 			content = header + "\n" + a.list.View()
@@ -426,6 +458,11 @@ func (a *App) View() string {
 	available := a.height - 3
 	contentStyle := lipgloss.NewStyle().Height(available).MaxHeight(available)
 
+	if a.mondayMode {
+		a.status.mondayQuip = mondayQuips[a.mondayIdx%len(mondayQuips)]
+	} else {
+		a.status.mondayQuip = ""
+	}
 	return contentStyle.Render(content) + "\n" + renderKeyBar(a.width) + "\n" + a.status.View()
 }
 
@@ -578,6 +615,7 @@ func (a *App) snoozeIncidents(ids []string, duration time.Duration) tea.Cmd {
 
 const (
 	cheatBufMax  = 16
+	cheatPrefix  = "bpd"
 	cheatUp      = '\x01'
 	cheatDown    = '\x02'
 	cheatLeft    = '\x03'
@@ -590,6 +628,38 @@ var konamiCode = string([]byte{
 	'b', 'a',
 })
 
+var textCheatCodes = []string{
+	"bpdcruise", "bpdwoosah", "bpdrage", "bpdcalm", "bpdcoffee",
+	"bpdfine", "bpdshrug", "bpdmeh", "bpdmonday", "bpdhelp", "bpdparty",
+}
+
+var mondayQuips = []string{
+	"I didn't sign up for this",
+	"Have you tried turning it off and on again",
+	"This is a growth opportunity",
+	"Per my last escalation",
+	"It's not a bug, it's a feature",
+	"Maybe the real incident was the friends we made along the way",
+	"Sounds like a Monday problem",
+	"I'm not paid enough for this",
+	"That's a future-me problem",
+	"This is above my pay grade",
+	"Working as designed (by Satan)",
+	"It works on my machine",
+}
+
+var sarcasticHelp = []string{
+	"Have you tried acknowledging it?",
+	"The alerts will stop when the problems stop.",
+	"Maybe the real incident was the friends we made along the way.",
+	"Just close your laptop. Problem solved.",
+	"Have you considered a career change?",
+	"This too shall pass. Probably.",
+	"Remember: it's just computers all the way down.",
+	"Tip: alerts can't wake you if you never sleep.",
+	"Pro move: blame the network.",
+}
+
 var partyColors = []lipgloss.Color{
 	lipgloss.Color("196"), // red
 	lipgloss.Color("208"), // orange
@@ -599,7 +669,17 @@ var partyColors = []lipgloss.Color{
 	lipgloss.Color("201"), // magenta
 }
 
+func swallowKey() tea.Msg { return nil }
+
+const cheatTimeout = 3 * time.Second
+
 func (a *App) checkCheatCode(msg tea.KeyMsg) tea.Cmd {
+	now := time.Now()
+	if !a.cheatLastKey.IsZero() && now.Sub(a.cheatLastKey) > cheatTimeout {
+		a.cheatBuf = ""
+	}
+	a.cheatLastKey = now
+
 	switch msg.Type {
 	case tea.KeyUp:
 		a.cheatBuf += string(cheatUp)
@@ -622,7 +702,7 @@ func (a *App) checkCheatCode(msg tea.KeyMsg) tea.Cmd {
 	}
 
 	switch {
-	case strings.HasSuffix(a.cheatBuf, konamiCode):
+	case strings.HasSuffix(a.cheatBuf, konamiCode) || strings.HasSuffix(a.cheatBuf, "bpdparty"):
 		a.partyMode = !a.partyMode
 		a.cheatBuf = ""
 		if a.partyMode {
@@ -630,7 +710,8 @@ func (a *App) checkCheatCode(msg tea.KeyMsg) tea.Cmd {
 			return a.partyTick()
 		}
 		a.status.setMessage(styleSuccess.Render("Party's over"))
-	case strings.HasSuffix(a.cheatBuf, "cruise"):
+		return swallowKey
+	case strings.HasSuffix(a.cheatBuf, "bpdcruise"):
 		a.autoAck = !a.autoAck
 		a.cheatBuf = ""
 		if a.autoAck {
@@ -638,18 +719,21 @@ func (a *App) checkCheatCode(msg tea.KeyMsg) tea.Cmd {
 			return a.autoAction()
 		}
 		a.status.setMessage(styleSuccess.Render("Cruise control disengaged"))
-	case strings.HasSuffix(a.cheatBuf, "woosah"):
+		return swallowKey
+	case strings.HasSuffix(a.cheatBuf, "bpdwoosah"):
 		a.zenMode = true
 		a.cheatBuf = ""
 		a.status.setMessage(styleZen.Render("inhale... exhale..."))
 		return tea.Tick(5*time.Second, func(time.Time) tea.Msg { return zenExpiredMsg{} })
-	case strings.HasSuffix(a.cheatBuf, "rage"):
+	case strings.HasSuffix(a.cheatBuf, "bpdrage"):
 		a.cheatBuf = ""
 		a.status.setMessage(styleCheatActive.Render("(╯°□°)╯︵ ┻━┻"))
-	case strings.HasSuffix(a.cheatBuf, "calm"):
+		return swallowKey
+	case strings.HasSuffix(a.cheatBuf, "bpdcalm"):
 		a.cheatBuf = ""
 		a.status.setMessage(styleSuccess.Render("┬─┬ノ( º _ ºノ)"))
-	case strings.HasSuffix(a.cheatBuf, "coffee"):
+		return swallowKey
+	case strings.HasSuffix(a.cheatBuf, "bpdcoffee"):
 		a.coffeeBreak = !a.coffeeBreak
 		a.cheatBuf = ""
 		if a.coffeeBreak {
@@ -657,8 +741,62 @@ func (a *App) checkCheatCode(msg tea.KeyMsg) tea.Cmd {
 		} else {
 			a.status.setMessage(styleSuccess.Render("Back to work"))
 		}
+		return swallowKey
+	case strings.HasSuffix(a.cheatBuf, "bpdfine"):
+		a.cheatBuf = ""
+		a.fineMode = true
+		fireH := a.height - 2
+		if fireH < 5 {
+			fireH = 5
+		}
+		a.fire = newFireGrid(a.width, fireH)
+		for i := 0; i < fireH; i++ {
+			a.fire.step()
+		}
+		return tea.Batch(
+			a.fireTick(),
+			tea.Tick(5*time.Second, func(time.Time) tea.Msg { return fireExpiredMsg{} }),
+		)
+	case strings.HasSuffix(a.cheatBuf, "bpdshrug"):
+		a.cheatBuf = ""
+		a.status.setMessage(styleHelp.Render(`¯\_(ツ)_/¯`))
+		return swallowKey
+	case strings.HasSuffix(a.cheatBuf, "bpdmeh"):
+		a.worseName = !a.worseName
+		a.cheatBuf = ""
+		return swallowKey
+	case strings.HasSuffix(a.cheatBuf, "bpdmonday"):
+		a.mondayMode = !a.mondayMode
+		a.cheatBuf = ""
+		if a.mondayMode {
+			a.mondayIdx = rand.Intn(len(mondayQuips))
+			a.status.setMessage(styleCheatActive.Render("Monday mode engaged"))
+		} else {
+			a.status.setMessage(styleSuccess.Render("Monday mode disengaged"))
+		}
+		return swallowKey
+	case strings.HasSuffix(a.cheatBuf, "bpdhelp"):
+		a.cheatBuf = ""
+		tip := sarcasticHelp[rand.Intn(len(sarcasticHelp))]
+		a.status.setMessage(styleZen.Render(tip))
+		return swallowKey
+	}
+
+	if a.isPartialCheatCode() {
+		return swallowKey
 	}
 	return nil
+}
+
+func (a *App) isPartialCheatCode() bool {
+	for _, code := range textCheatCodes {
+		for prefixLen := len(cheatPrefix); prefixLen < len(code); prefixLen++ {
+			if strings.HasSuffix(a.cheatBuf, code[:prefixLen]) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func (a *App) autoAction() tea.Cmd {
@@ -673,6 +811,10 @@ func (a *App) autoAction() tea.Cmd {
 
 func (a *App) partyTick() tea.Cmd {
 	return tea.Tick(150*time.Millisecond, func(time.Time) tea.Msg { return partyTickMsg{} })
+}
+
+func (a *App) fireTick() tea.Cmd {
+	return tea.Tick(80*time.Millisecond, func(time.Time) tea.Msg { return fireTickMsg{} })
 }
 
 func (a *App) renderPartyTitle() string {

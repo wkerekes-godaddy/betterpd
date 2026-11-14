@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.1.8
+### 11/13/2026
+- Additional UX improvements and internal refinements
+- Minor visual enhancements
+
 ## v0.1.7
 ### 11/13/2026
 - Internal UX refinements and visual polish
