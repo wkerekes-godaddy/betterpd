@@ -17,6 +17,7 @@ type statusBar struct {
 	width       int
 	message     string
 	messageTime time.Time
+	mondayQuip  string
 }
 
 func (s *statusBar) setMessage(msg string) {
@@ -30,6 +31,8 @@ func (s statusBar) View() string {
 	var middle string
 	if s.message != "" && time.Since(s.messageTime) < 5*time.Second {
 		middle = s.message
+	} else if s.mondayQuip != "" {
+		middle = styleZen.Render(s.mondayQuip)
 	} else if s.orgName != "" {
 		middle = styleOrgName.Render(s.orgName)
 	}
